@@ -1,32 +1,26 @@
 /* eslint-disable camelcase */
 /*!
 // Common Util for frontend and backend
-//
-// DOT NOT MODIFY util.js!
-// Need to run "npm run tsc" to compile if there are any changes.
-//
-// Backend uses the compiled file util.js
-// Frontend uses util.ts
 */
 
-import dayjsFrontend from "dayjs";
-
-// For dayjs plugins' type checking, don't remove event though it is not used in this file
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as timezone from "dayjs/plugin/timezone";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as utc from "dayjs/plugin/utc";
-
-import * as jsonata from "jsonata";
-
-export const isDev = process.env.NODE_ENV === "development";
-export const isNode = typeof process !== "undefined" && process?.versions?.node;
+import dayjs from "dayjs";
 
 /**
- * Smarter dayjs import that supports both frontend and backend
- * @returns {dayjs.Dayjs} dayjs instance
+ * Check if NODE_ENV is development
+ * @returns yes or no
  */
-const dayjs = isNode ? require("dayjs") : dayjsFrontend;
+export function isDevEnv() {
+    return process.env.NODE_ENV === "development";
+}
+
+export const isNode = typeof process !== "undefined" && process?.versions?.node;
+
+export const devOriginList = [
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://localhost:3000",
+    "http://localhost:3001",
+];
 
 export const appName = "Uptime Kuma";
 export const DOWN = 0;
@@ -43,7 +37,6 @@ export const SQL_DATE_FORMAT = "YYYY-MM-DD";
 export const SQL_DATETIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
 export const SQL_DATETIME_FORMAT_WITHOUT_SECOND = "YYYY-MM-DD HH:mm";
 
-export const MAX_INTERVAL_SECOND = 2073600; // 24 days
 export const MIN_INTERVAL_SECOND = 1; // 1 second
 
 export const INCIDENT_PAGE_SIZE = 10;
@@ -128,18 +121,15 @@ const consoleModuleColors = [
     CONSOLE_STYLE_FgPink,
 ];
 
-const consoleLevelColors: Record<string, string> = {
-    INFO: CONSOLE_STYLE_FgCyan,
-    WARN: CONSOLE_STYLE_FgYellow,
-    ERROR: CONSOLE_STYLE_FgRed,
-    DEBUG: CONSOLE_STYLE_FgGray,
-};
+type LogLevel = "info" | "warn" | "error" | "debug";
 
-/**
- * Flip the status of s
- * @param s input status: UP or DOWN
- * @returns {number} UP or DOWN
- */
+const consoleLevelColors = {
+    info: CONSOLE_STYLE_FgCyan,
+    warn: CONSOLE_STYLE_FgYellow,
+    error: CONSOLE_STYLE_FgRed,
+    debug: CONSOLE_STYLE_FgGray,
+} as const;
+
 export const badgeConstants = {
     naColor: "#999",
     defaultUpColor: "#66c20a",
@@ -162,8 +152,8 @@ export const badgeConstants = {
 
 /**
  * Flip the status of s between UP and DOWN if this is possible
- * @param s {number} status
- * @returns {number} flipped status
+ * @param s status
+ * @returns flipped status
  */
 export function flipStatus(s: number) {
     if (s === UP) {
@@ -180,7 +170,6 @@ export function flipStatus(s: number) {
 /**
  * Delays for specified number of seconds
  * @param ms Number of milliseconds to sleep for
- * @returns {Promise<void>} Promise that resolves after ms
  */
 export function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -189,7 +178,7 @@ export function sleep(ms: number) {
 /**
  * PHP's ucfirst
  * @param str string input
- * @returns {string} string with first letter capitalized
+ * @returns string with first letter capitalized
  */
 export function ucfirst(str: string) {
     if (!str) {
@@ -203,10 +192,9 @@ export function ucfirst(str: string) {
 /**
  * @deprecated Use log.debug (https://github.com/louislam/uptime-kuma/pull/910)
  * @param msg Message to write
- * @returns {void}
  */
 export function debug(msg: unknown) {
-    log.log("", "DEBUG", msg);
+    log.log("", "debug", msg);
 }
 
 class Logger {
@@ -250,12 +238,11 @@ class Logger {
     /**
      * Write a message to the log
      * @param module The module the log comes from
-     * @param level Log level. One of INFO, WARN, ERROR, DEBUG or can be customized.
+     * @param level Log level. One of info, warn, error, debug.
      * @param msg Message to write
-     * @returns {void}
      */
-    log(module: string, level: "INFO" | "WARN" | "ERROR" | "DEBUG", ...msg: unknown[]) {
-        if (level === "DEBUG" && !isDev) {
+    log(module: string, level: LogLevel, ...msg: unknown[]) {
+        if (level === "debug" && !isDevEnv()) {
             return;
         }
 
@@ -264,6 +251,7 @@ class Logger {
         }
 
         module = module.toUpperCase();
+        const levelLabel = level.toUpperCase();
 
         let now;
         if (dayjs.tz) {
@@ -308,7 +296,7 @@ class Logger {
         if (isNode) {
             // Add console colors
             switch (level) {
-                case "DEBUG":
+                case "debug":
                     timePart = CONSOLE_STYLE_FgGray + now + CONSOLE_STYLE_Reset;
                     break;
                 default:
@@ -317,27 +305,27 @@ class Logger {
             }
 
             modulePart = "[" + moduleColor + module + CONSOLE_STYLE_Reset + "]";
-            levelPart = levelColor + `${level}:` + CONSOLE_STYLE_Reset;
+            levelPart = levelColor + `${levelLabel}:` + CONSOLE_STYLE_Reset;
         } else {
             // No console colors
             timePart = now;
             modulePart = `[${module}]`;
-            levelPart = `${level}:`;
+            levelPart = `${levelLabel}:`;
         }
 
         // Write to console
         switch (level) {
-            case "ERROR":
+            case "error":
                 console.error(timePart, modulePart, levelPart, ...msg);
                 break;
-            case "WARN":
+            case "warn":
                 console.warn(timePart, modulePart, levelPart, ...msg);
                 break;
-            case "INFO":
+            case "info":
                 console.info(timePart, modulePart, levelPart, ...msg);
                 break;
-            case "DEBUG":
-                if (isDev) {
+            case "debug":
+                if (isDevEnv()) {
                     console.debug(timePart, modulePart, levelPart, ...msg);
                 }
                 break;
@@ -354,7 +342,7 @@ class Logger {
      * @returns {void}
      */
     info(module: string, ...msg: unknown[]) {
-        this.log(module, "INFO", ...msg);
+        this.log(module, "info", ...msg);
     }
 
     /**
@@ -364,7 +352,7 @@ class Logger {
      * @returns {void}
      */
     warn(module: string, ...msg: unknown[]) {
-        this.log(module, "WARN", ...msg);
+        this.log(module, "warn", ...msg);
     }
 
     /**
@@ -374,7 +362,7 @@ class Logger {
      * @returns {void}
      */
     error(module: string, ...msg: unknown[]) {
-        this.log(module, "ERROR", ...msg);
+        this.log(module, "error", ...msg);
     }
 
     /**
@@ -384,7 +372,7 @@ class Logger {
      * @returns {void}
      */
     debug(module: string, ...msg: unknown[]) {
-        this.log(module, "DEBUG", ...msg);
+        this.log(module, "debug", ...msg);
     }
 
     /**
@@ -395,7 +383,7 @@ class Logger {
      * @returns {void}
      */
     exception(module: string, exception: unknown, ...msg: unknown[]) {
-        this.log(module, "ERROR", ...msg, exception);
+        this.log(module, "error", ...msg, exception);
     }
 }
 
@@ -404,27 +392,6 @@ export const log = new Logger();
 declare global {
     interface String {
         replaceAll(str: string, newStr: string): string;
-    }
-}
-
-/**
- * String.prototype.replaceAll() polyfill
- * https://gomakethings.com/how-to-replace-a-section-of-a-string-with-another-one-with-vanilla-js/
- * @author Chris Ferdinandi
- * @license MIT
- * @returns {void}
- */
-export function polyfill() {
-    if (!String.prototype.replaceAll) {
-        String.prototype.replaceAll = function (str: string, newStr: string) {
-            // If a regex pattern
-            if (Object.prototype.toString.call(str).toLowerCase() === "[object regexp]") {
-                return this.replace(str, newStr);
-            }
-
-            // If a string
-            return this.replace(new RegExp(str, "g"), newStr);
-        };
     }
 }
 
@@ -444,7 +411,7 @@ export class TimeLogger {
      * @returns {void}
      */
     print(name: string): void {
-        if (isDev && process.env.TIMELOGGER === "1") {
+        if (isDevEnv() && process.env.TIMELOGGER === "1") {
             console.log(name + ": " + (dayjs().valueOf() - this.startTime) + "ms");
         }
     }
@@ -454,7 +421,7 @@ export class TimeLogger {
  * Returns a random number between min (inclusive) and max (exclusive)
  * @param min minumim value, inclusive
  * @param max maximum value, exclusive
- * @returns {number} Random number
+ * @returns Random number
  */
 export function getRandomArbitrary(min: number, max: number) {
     return Math.random() * (max - min) + min;
@@ -634,7 +601,7 @@ export function isoToUTCDateTime(input: string) {
 
 /**
  * @param input valid datetime string
- * @returns {string} ISO DateTime string
+ * @returns ISO DateTime string
  */
 export function utcToISODateTime(input: string) {
     return dayjs.utc(input).toISOString();
@@ -676,102 +643,6 @@ export function intHash(str: string, length = 10): number {
     return ((hash % length) + length) % length; // Ensure the result is non-negative
 }
 
-/**
- * Evaluate a JSON query expression against the provided data.
- * @param data The data to evaluate the JSON query against.
- * @param jsonPath The JSON path or custom JSON query expression.
- * @param jsonPathOperator The operator to use for comparison.
- * @param expectedValue The expected value to compare against.
- * @returns An object containing the status and the evaluation result.
- * @throws Error if the evaluation returns undefined.
- */
-export async function evaluateJsonQuery(
-    data: any,
-    jsonPath: string,
-    jsonPathOperator: string,
-    expectedValue: any
-): Promise<{ status: boolean; response: any }> {
-    // Attempt to parse data as JSON; if unsuccessful, handle based on data type.
-    let response: any;
-    try {
-        response = JSON.parse(data);
-    } catch {
-        response =
-            (typeof data === "object" || typeof data === "number") && !Buffer.isBuffer(data) ? data : data.toString();
-    }
-
-    try {
-        // If a JSON path is provided, pre-evaluate the data using it.
-        response = jsonPath ? await jsonata(jsonPath).evaluate(response) : response;
-
-        if (response === null || response === undefined) {
-            throw new Error("Empty or undefined response. Check query syntax and response structure");
-        }
-
-        // Check for arrays: JSONata filter expressions like .[predicate] always return arrays
-        if (Array.isArray(response)) {
-            const responseStr = JSON.stringify(response);
-            const truncatedResponse = responseStr.length > 25 ? responseStr.substring(0, 25) + "...]" : responseStr;
-            throw new Error(
-                "JSON query returned the array " +
-                    truncatedResponse +
-                    ", but a primitive value is required. " +
-                    "Modify your query to return a single value via [0] to get the first element or use an aggregation like $count(), $sum() or $boolean()."
-            );
-        }
-
-        if (typeof response === "object" || response instanceof Date || typeof response === "function") {
-            throw new Error(
-                `The post-JSON query evaluated response from the server is of type ${typeof response}, which cannot be directly compared to the expected value`
-            );
-        }
-
-        // Perform the comparison logic using the chosen operator
-        let jsonQueryExpression;
-        switch (jsonPathOperator) {
-            case ">":
-            case ">=":
-            case "<":
-            case "<=":
-                jsonQueryExpression = `$number($.value) ${jsonPathOperator} $number($.expected)`;
-                break;
-            case "!=":
-                jsonQueryExpression = "$.value != $.expected";
-                break;
-            case "==":
-                jsonQueryExpression = "$.value = $.expected";
-                break;
-            case "contains":
-                jsonQueryExpression = "$contains($.value, $.expected)";
-                break;
-            default:
-                throw new Error(`Invalid condition ${jsonPathOperator}`);
-        }
-
-        // Evaluate the JSON Query Expression
-        const expression = jsonata(jsonQueryExpression);
-        const status = await expression.evaluate({
-            value: response.toString(),
-            expected: expectedValue.toString(),
-        });
-
-        if (status === undefined) {
-            throw new Error(
-                "Query evaluation returned undefined. Check query syntax and the structure of the response data"
-            );
-        }
-
-        return {
-            status, // The evaluation of the json query
-            response, // The response from the server or result from initial json-query evaluation
-        };
-    } catch (err: any) {
-        response = JSON.stringify(response); // Ensure the response is treated as a string for the console
-        response = response && response.length > 50 ? `${response.substring(0, 100)}… (truncated)` : response; // Truncate long responses to the console
-        throw new Error(`Error evaluating JSON query: ${err.message}. Response from server was: ${response}`);
-    }
-}
-
 // these types will have domain expiry support via the specified field
 export const TYPES_WITH_DOMAIN_EXPIRY_SUPPORT_VIA_FIELD = {
     http: "url",
@@ -792,3 +663,33 @@ export const TYPES_WITH_DOMAIN_EXPIRY_SUPPORT_VIA_FIELD = {
     "tailscale-ping": "hostname",
     "sip-options": "hostname",
 } as const;
+
+/**
+ * @param res Response object from fetch
+ */
+export async function checkFetch(res: Response): Promise<void> {
+    let data;
+
+    try {
+        if (!res.ok) {
+            data = await res.json();
+        }
+    } catch (e) {
+        throw new Error("Failed to fetch without message: " + res.status);
+    }
+
+    if (data) {
+        if (data.msg) {
+            throw new Error(data.msg);
+        } else {
+            throw new Error(JSON.stringify(data));
+        }
+    }
+
+    const contentType = res.headers.get("content-type");
+
+    // if response is not in json type
+    if (!contentType || !contentType.startsWith("application/json")) {
+        throw new Error("Response is not in JSON format");
+    }
+}
